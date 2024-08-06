@@ -5,9 +5,27 @@ var validator = require("email-validator");
 let otpExpiryTime = process.env.OTP_EXPIRY_MINUTES;
 
 exports.lambdaHandler = async (event, context) => {
-  let Body = JSON.parse(event.body);
+  console.log('Received event:', JSON.stringify(event, null, 2));
+
+  let Body;
+  try {
+    // Log the raw event body for debugging
+    console.log('Raw event body:', event.body);
+    
+    Body = JSON.parse(event.body);
+    console.log('Parsed body:', Body);
+  } catch (error) {
+    console.error('Error parsing event body:', error);
+    return {
+      statusCode: 400,
+      body: JSON.stringify({
+        message: "Invalid request body",
+      }),
+    };
+  }
 
   if (!validator.validate(Body.email)) {
+    console.error('Invalid email:', Body.email);
     return {
       statusCode: 422,
       body: JSON.stringify({
@@ -19,18 +37,25 @@ exports.lambdaHandler = async (event, context) => {
   let sessionToken = gerRandomString(32);
   let otp = gerRandomString(process.env.TOKEN_LENGTH, true);
 
+  console.log('Session Token:', sessionToken);
+  console.log('OTP:', otp);
+
   var params = {
+    TableName: process.env.DB_TABLE,
     Item: {
-      pk: sessionToken + "_" + otp,
+      sessionToken: sessionToken, // Partition key
+      otp: otp,                   // Sort key
       email: Body.email,
-      expiryAt: Math.floor(new Date().getTime() / 1000) + otpExpiryTime * 60,
+      expiresAt: Math.floor(new Date().getTime() / 1000) + otpExpiryTime * 60,
     },
     ReturnConsumedCapacity: "TOTAL",
-    TableName: process.env.DB_TABLE,
   };
+
+  console.log('DynamoDB put parameters:', params);
 
   try {
     await docClient.put(params).promise();
+    console.log('Item put successfully');
     return {
       statusCode: 200,
       headers: {
@@ -45,8 +70,7 @@ exports.lambdaHandler = async (event, context) => {
       }),
     };
   } catch (error) {
-    console.error("Error", error.stack);
-
+    console.error('Error putting item to DynamoDB:', error.stack);
     return {
       statusCode: 500,
       headers: {
@@ -77,3 +101,4 @@ function gerRandomString(length, onlyNumbers = false) {
 
   return result;
 }
+

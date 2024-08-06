@@ -1,80 +1,96 @@
 const AWS = require("aws-sdk");
 var docClient = new AWS.DynamoDB.DocumentClient();
 
-let response;
+exports.lambdaHandler = async (event) => {
+  console.log('Received event:', JSON.stringify(event, null, 2));
 
-exports.lambdaHandler = async (event, context) => {
-  let Body = JSON.parse(event.body);
+  let Body;
+  try {
+    // Log the event body to diagnose issues
+    console.log('Raw event body:', event.body);
 
-  if (!Body.sessionId || !Body.token) {
+    // Parse the incoming request body
+    Body = JSON.parse(event.body);
+    console.log('Parsed body:', Body);
+  } catch (error) {
+    // Handle JSON parsing errors
+    console.error('Error parsing event body:', error);
     return {
-      statusCode: 422,
-      headers: {
-        'Content-Type': 'application/json', 
-        'Access-Control-Allow-Origin': '*'
-      },
+      statusCode: 400,
       body: JSON.stringify({
-        message: "Required fields not found.",
-        error: "token and sessionId required",
+        message: "Invalid request body",
+        error: error.message
       }),
     };
   }
 
-  let data = await fetchSessionData(Body.sessionId + "_" + Body.token);
+  // Destructure sessionToken and otp from the parsed body
+  const { sessionToken, otp } = Body;
+
+  // Check for missing sessionToken or otp
+  if (!sessionToken || !otp) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({
+        message: "Missing sessionToken or otp",
+      }),
+    };
+  }
+
   try {
-    if (
-      data[0] !== undefined &&
-      data[0]["expiryAt"] > Math.floor(new Date().getTime() / 1000)
-    ) {
-      response = {
-        statusCode: 200,
-        headers: {
-          'Content-Type': 'application/json', 
-          'Access-Control-Allow-Origin': '*'
-        },
-        body: JSON.stringify({
-          message: "Validated",
-        }),
-      };
+    // Define DynamoDB query parameters
+    const params = {
+      TableName: process.env.DB_TABLE,
+      Key: {
+        sessionToken: sessionToken, // Partition key
+        otp: otp // Sort key
+      }
+    };
+
+    // Log DynamoDB query parameters for debugging
+    console.log('DynamoDB query parameters:', JSON.stringify(params, null, 2));
+
+    // Query DynamoDB for the item
+    const result = await docClient.get(params).promise();
+
+    // Check if the item exists
+    if (result.Item) {
+      // Get current time in seconds
+      const currentTime = Math.floor(new Date().getTime() / 1000);
+
+      // Validate OTP expiry
+      if (currentTime <= result.Item.expiresAt) {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: "OTP verified successfully",
+          }),
+        };
+      } else {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({
+            message: "OTP expired",
+          }),
+        };
+      }
     } else {
-      response = {
-        statusCode: 422,
-        headers: {
-          'Content-Type': 'application/json', 
-          'Access-Control-Allow-Origin': '*'
-        },
+      return {
+        statusCode: 404,
         body: JSON.stringify({
-          message: "Cannot validate OTP.",
+          message: "OTP not found",
         }),
       };
     }
-  } catch (err) {
-    console.log(err);
-    response = {
-      statusCode: 422,
-      headers: {
-        'Content-Type': 'application/json', 
-        'Access-Control-Allow-Origin': '*'
-      },
+  } catch (error) {
+    // Handle errors during DynamoDB operations
+    console.error('Error verifying OTP:', error);
+    return {
+      statusCode: 500,
       body: JSON.stringify({
-        message: "Cannot validate OTP.",
+        message: "OTP verification failed",
+        error: error.message,
       }),
     };
   }
-
-  return response;
 };
-
-async function fetchSessionData(pk) {
-  var params = {
-    ExpressionAttributeValues: {
-      ":pk": pk,
-    },
-    KeyConditionExpression: "pk = :pk",
-    TableName: process.env.DB_TABLE,
-  };
-  console.log(params);
-  let data = await docClient.query(params).promise();
-
-  return data.Items;
-}

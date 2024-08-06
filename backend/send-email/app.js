@@ -1,30 +1,45 @@
 const AWS = require("aws-sdk");
-var ses = new AWS.SES();
+const ses = new AWS.SES();
 
-let fromAddress = process.env.FROM_ADDRESS;
+const fromAddress = process.env.FROM_ADDRESS;
 
 exports.lambdaHandler = async (event, context) => {
-  for (const record of event.Records) {
-    if (record.eventName === "INSERT") {
-      let pk = record.dynamodb.NewImage.pk.S.split("_");
-      let otp = pk[1];
-      let toAddress = record.dynamodb.NewImage.email.S;
+  console.log('Received event:', JSON.stringify(event, null, 2));
 
-      await sendEmail(otp, toAddress);
+  for (const record of event.Records) {
+    // Process only INSERT events
+    if (record.eventName === "INSERT") {
+      try {
+        // Extract sessionToken and OTP from DynamoDB record
+        const sessionToken = record.dynamodb.NewImage.sessionToken.S;
+        const otp = record.dynamodb.NewImage.otp.S;
+        const toAddress = record.dynamodb.NewImage.email.S;
+
+        console.log('Extracted Session Token:', sessionToken);
+        console.log('Extracted OTP:', otp);
+        console.log('Recipient Email:', toAddress);
+
+        // Send the OTP email
+        await sendEmail(otp, toAddress);
+      } catch (error) {
+        console.error('Error processing record:', error);
+      }
     }
   }
 };
 
 async function sendEmail(otp, toAddress) {
-  var htmlBody =
-    `<!DOCTYPE html>
-      <html>
-        <body>
-          <p>Use this code to verify your login at Simple OTP</p>
-          <p><h1>` + otp + `</h1></p>
-        </body>
-      </html>`;
+  // Compose the email body with the OTP
+  const htmlBody = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <p>Use this code to approve your Invoice on RosePay</p>
+        <p><h1>${otp}</h1></p>
+      </body>
+    </html>`;
 
+  // Define the parameters for the SES email
   const params = {
     Destination: {
       ToAddresses: [toAddress],
@@ -38,11 +53,19 @@ async function sendEmail(otp, toAddress) {
       },
       Subject: {
         Charset: "UTF-8",
-        Data: "Your OTP at Simple OTP",
+        Data: "Your OTP for your approved Invoice on RosePay",
       },
     },
-    Source: "SimpleOTP <" + fromAddress + ">",
+    Source: `RosePayOTP <${fromAddress}>`,
   };
 
-  await ses.sendEmail(params).promise();
+  console.log('Sending email with parameters:', JSON.stringify(params, null, 2));
+
+  // Send the email using SES
+  try {
+    await ses.sendEmail(params).promise();
+    console.log('Email sent successfully');
+  } catch (error) {
+    console.error('Error sending email:', error);
+  }
 }

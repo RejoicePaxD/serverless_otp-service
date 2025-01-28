@@ -58,7 +58,7 @@ Resources:
     Properties:
       CodeUri: generate-otp/
       Handler: app.lambdaHandler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       Environment:
         Variables:
           DB_TABLE: !Ref DynamodbTable
@@ -81,7 +81,7 @@ Resources:
     Properties:
       CodeUri: verify-otp/
       Handler: app.lambdaHandler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       Environment:
         Variables:
           DB_TABLE: !Ref DynamodbTable
@@ -112,7 +112,7 @@ Resources:
     Properties:
       CodeUri: send-email/
       Handler: app.lambdaHandler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       Environment:
         Variables:
           FROM_ADDRESS: !Ref SesFromAddress

@@ -39,12 +39,14 @@ exports.lambdaHandler = async (event) => {
 
   try {
     // Define DynamoDB query parameters
+    const pk = `${event.body.sessionToken}_${event.body.otp}`;
+
     const params = {
       TableName: process.env.DB_TABLE,
       Key: {
-        sessionToken: sessionToken, // Partition key
-        otp: otp // Sort key
-      }
+        pk: pk, // Correctly defined pk
+        expiryAt: Number(event.body.expiryAt), // Ensure the correct field for expiryAt
+      },
     };
 
     // Log DynamoDB query parameters for debugging

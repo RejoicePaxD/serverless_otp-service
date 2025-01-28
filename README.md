@@ -16,6 +16,8 @@ This repository contains a simple OTP service build with AWS Serverless services
 
 The following reference resources where used. The focus was on the backend and tailor made it to my use case.
 
+**[Building A Serverless Notifications Feature With AWS by Uriel Bitton](https://www.linkedin.com/pulse/building-serverless-notifications-feature-aws-uriel-bitton-gzzae/)**
+
 GitHub Repo **[Simple OTP](https://github.com/pubudusj/simple-otp)**
 
 Simple OTP **[Blog Post](https://pubudu.dev/posts/simple-otp-service-with-aws-serverless)**
